@@ -1,0 +1,40 @@
+name: cloud-run
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Setup - gcloud / gsutil
+        uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+        with:
+          service_account_key: ${{ secrets.ACTIONS_SERVICE_ACC }}
+          export_default_credentials: true
+      - name: Set default project
+        run: |
+          gcloud config set core/project joshcarp-installer
+          gcloud auth configure-docker
+          gcloud config set run/region us-central1
+      - name: Build
+        run: |-
+          gcloud builds submit \
+            --quiet \
+            --tag "gcr.io/joshcarp-installer/install:$GITHUB_SHA"
+      - name: Deploy
+        run: |-
+          gcloud run deploy "install" \
+            --quiet \
+            --region "us-central1" \
+            --image "gcr.io/joshcarp-installer/install:$GITHUB_SHA" \
+            --platform "managed" \
+            --allow-unauthenticated
+      - name: Set permissions
+        run: |-
+          gcloud run services add-iam-policy-binding install \
+            --member="allUsers" \
+            --role="roles/run.invoker" \
+            --platform managed
